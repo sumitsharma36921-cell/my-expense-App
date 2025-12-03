@@ -1,12 +1,13 @@
-/* --- Logic (Same functionality, upgraded visuals) --- */
+// --- Logic: Empty Start (No Names) ---
 let data = JSON.parse(localStorage.getItem('proExpenseData')) || {
-    roommates: ['Sumit', 'Rahul', 'Amit'],
+    roommates: [], // Empty default
     expenses: []
 };
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
-    renderRoommates(); renderExpenses();
+    renderRoommates(); 
+    renderExpenses();
     // Load saved theme
     const savedTheme = localStorage.getItem('proTheme') || 'default';
     setTheme(savedTheme);
@@ -14,7 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function saveData() {
     localStorage.setItem('proExpenseData', JSON.stringify(data));
-    renderRoommates(); renderExpenses();
+    renderRoommates(); 
+    renderExpenses();
 }
 
 // --- Theme Engine ---
@@ -41,12 +43,18 @@ function removeRoommate(name) {
 }
 
 function addExpense() {
+    if(data.roommates.length === 0) {
+        alert("Please add a roommate first!");
+        closeModal();
+        return;
+    }
     const amount = parseFloat(document.getElementById('exAmount').value);
     const payer = document.getElementById('exPayer').value;
     const desc = document.getElementById('exDesc').value;
     if(amount && payer && desc) {
         data.expenses.unshift({ id: Date.now(), amount, payer, desc, date: new Date().toLocaleDateString() });
-        saveData(); closeModal();
+        saveData(); 
+        closeModal();
     }
 }
 
@@ -55,16 +63,45 @@ function deleteExpense(id) {
     saveData();
 }
 
+function clearAllData() {
+    if (confirm("Are you sure you want to RESET the app? This will delete all data.")) {
+        localStorage.removeItem('proExpenseData');
+        
+        // Reset to Empty
+        data = {
+            roommates: [],
+            expenses: []
+        };
+
+        renderRoommates();
+        renderExpenses();
+        
+        if(chartInstance) {
+            chartInstance.destroy();
+            chartInstance = null;
+        }
+        document.getElementById('settlementPlan').innerHTML = 'Run "Settle Up" AI action first.';
+        // switchView('expenses') call optional here if you want to force back to home
+    }
+}
+
 // --- Renders ---
 function renderRoommates() {
     const list = document.getElementById('roommatesList');
     const select = document.getElementById('exPayer');
+    const msg = document.getElementById('emptyRoommateMsg');
     
-    list.innerHTML = data.roommates.map(r => 
-        `<div class="chip">${r} <i class="fas fa-times" style="cursor:pointer; opacity:0.6" onclick="removeRoommate('${r}')"></i></div>`
-    ).join('');
-    
-    select.innerHTML = data.roommates.map(r => `<option value="${r}">${r}</option>`).join('');
+    if(data.roommates.length === 0) {
+        msg.style.display = 'block';
+        list.innerHTML = '';
+        select.innerHTML = '<option disabled selected>Add roommates first</option>';
+    } else {
+        msg.style.display = 'none';
+        list.innerHTML = data.roommates.map(r => 
+            `<div class="chip">${r} <i class="fas fa-times" style="cursor:pointer; opacity:0.6" onclick="removeRoommate('${r}')"></i></div>`
+        ).join('');
+        select.innerHTML = data.roommates.map(r => `<option value="${r}">${r}</option>`).join('');
+    }
 }
 
 function renderExpenses() {
@@ -97,15 +134,21 @@ function renderExpenses() {
 function triggerAI(type) {
     const card = document.getElementById('aiCard');
     const text = document.getElementById('aiText');
+    
+    if(data.roommates.length < 2) {
+        alert("Need at least 2 people to split expenses!");
+        return;
+    }
+
     card.classList.remove('show');
     setTimeout(() => {
         card.classList.add('show');
         if(type === 'suggest') {
             const total = data.expenses.reduce((a,b) => a + b.amount, 0);
-            text.innerHTML = `Total spending is <strong style="color:var(--success)">₹${total}</strong>. Based on history, spending peaks on weekends. Try limiting dining out!`;
+            text.innerHTML = `Total spending is <strong style="color:var(--success)">₹${total}</strong>.`;
         } else {
             calculateSplit();
-            text.innerHTML = `Calculation complete! Check the <strong>Analytics Tab</strong> for the detailed payment plan.`;
+            text.innerHTML = `Calculation complete! Check the <strong>Analytics Tab</strong>.`;
         }
     }, 50);
 }
@@ -155,31 +198,31 @@ function renderChart() {
             labels: Object.keys(totals),
             datasets: [{
                 data: Object.values(totals),
-                backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#10b981'],
+                backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'],
                 borderColor: '#000',
                 borderWidth: 0
             }]
         },
         options: { 
-            responsive: true, 
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             plugins: { legend: { position: 'right', labels: { color: '#fff', font: { family: 'Outfit' } } } } 
         }
     });
 }
 
 // --- Nav & Utils ---
-function switchView(v) {
+function switchView(v, element) {
     document.getElementById('view-expenses').style.display = v === 'expenses' ? 'grid' : 'none';
     document.getElementById('view-summary').style.display = v === 'expenses' ? 'none' : 'grid';
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    // Note: The click handler in HTML passes the event automatically to this scope in some browsers, 
-    // but using event.currentTarget relies on the global event object.
-    if(window.event) window.event.currentTarget.classList.add('active'); 
-    
+    if(element) element.classList.add('active');
+    else {
+        const index = v === 'expenses' ? 0 : 1;
+        document.querySelectorAll('.nav-item')[index].classList.add('active');
+    }
     if(v === 'summary') { renderChart(); calculateSplit(); }
 }
+
 function openModal() { document.getElementById('expenseModal').classList.add('active'); }
 function closeModal() { document.getElementById('expenseModal').classList.remove('active'); }
-function clearAllData() { localStorage.removeItem('proExpenseData'); location.reload(); }
 function exportCSV() { alert("CSV Export feature ready!"); }
