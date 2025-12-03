@@ -1,4 +1,4 @@
-// --- FIREBASE CONFIGURATION (Provided by User) ---
+// --- FIREBASE CONFIGURATION (Verified) ---
 const firebaseConfig = {
   apiKey: "AIzaSyBhGkFL6Rz6FUbDhS7bAMWlq0VYB0XMceE",
   authDomain: "splitpro-app.firebaseapp.com",
@@ -10,13 +10,8 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-if (typeof firebase !== "undefined") {
-    firebase.initializeApp(firebaseConfig);
-    var db = firebase.firestore();
-    console.log("Firebase initialized successfully");
-} else {
-    console.error("Firebase SDK not loaded. Check index.html");
-}
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 // --- APP LOGIC ---
 let currentUser = null;
@@ -50,31 +45,22 @@ async function handleSignup() {
     if (!validateUsername(u)) { msg.innerText = 'User ID: Letters, Numbers & _ only.'; msg.style.color = 'var(--danger)'; return; }
 
     msg.innerText = 'Checking availability...';
-    
     try {
-        // Check if user exists in Cloud
         const userDoc = await db.collection("users").doc(u).get();
-        
         if (userDoc.exists) {
             msg.innerText = 'User ID already taken!'; msg.style.color = 'var(--danger)';
         } else {
-            // Create New User in Cloud
             const newUser = {
                 password: p, 
                 roommates: [u],
                 expenses: [],
                 profile: { displayName: u, avatar: '', bio: '' }
             };
-            
             await db.collection("users").doc(u).set(newUser);
-            
             msg.innerText = 'Account created! Login now.'; msg.style.color = 'var(--success)';
             setTimeout(toggleAuthMode, 1500);
         }
-    } catch (error) {
-        console.error(error);
-        msg.innerText = 'Error connecting to server. Check Firestore Rules.'; msg.style.color = 'var(--danger)';
-    }
+    } catch (error) { console.error(error); msg.innerText = 'Error connecting to server.'; msg.style.color = 'var(--danger)'; }
 }
 
 async function handleLogin() {
@@ -83,35 +69,22 @@ async function handleLogin() {
     const msg = document.getElementById('auth-msg');
     
     msg.innerText = 'Verifying...';
-    
     try {
         const userDoc = await db.collection("users").doc(u).get();
-        
         if (userDoc.exists) {
             const userData = userDoc.data();
-            // Simple string check for prototype. 
-            // Warning: Passwords are visible in DB. Use Firebase Auth in production.
             if (userData.password === p) {
                 currentUser = u;
                 document.getElementById('auth-screen').style.display = 'none';
                 document.getElementById('app-dashboard').style.display = 'flex';
-                loadUserData(u); // Load from Cloud
-            } else {
-                msg.innerText = 'Wrong password'; msg.style.color = 'var(--danger)';
-            }
-        } else {
-            msg.innerText = 'User not found'; msg.style.color = 'var(--danger)';
-        }
-    } catch (error) {
-        console.error(error);
-        msg.innerText = 'Connection failed. Check Internet/Rules.'; msg.style.color = 'var(--danger)';
-    }
+                loadUserData(u);
+            } else { msg.innerText = 'Wrong password'; msg.style.color = 'var(--danger)'; }
+        } else { msg.innerText = 'User not found'; msg.style.color = 'var(--danger)'; }
+    } catch (error) { console.error(error); msg.innerText = 'Connection failed.'; msg.style.color = 'var(--danger)'; }
 }
 
 function handleLogout() {
-    // Unsubscribe from real-time listener to save resources
     if(unsubscribeListener) { unsubscribeListener(); }
-    
     currentUser = null;
     document.getElementById('app-dashboard').style.display = 'none';
     document.getElementById('auth-screen').style.display = 'flex';
@@ -121,9 +94,7 @@ function handleLogout() {
 }
 
 // --- CLOUD DATA FUNCTIONS ---
-// Real-time Data Loading
 function loadUserData(username) {
-    // Listen for changes in real-time
     unsubscribeListener = db.collection("users").doc(username).onSnapshot((doc) => {
         if (doc.exists) {
             let raw = doc.data();
@@ -132,7 +103,6 @@ function loadUserData(username) {
                 expenses: raw.expenses || [],
                 profile: raw.profile || { displayName: username, bio: '', avatar: '' }
             };
-            
             updateProfileUI();
             renderRoommates(); 
             renderExpenses();
@@ -141,12 +111,11 @@ function loadUserData(username) {
     });
 }
 
-// Helper to fetch other user's info (Async)
 async function getOtherUserData(userId) {
     try {
         const doc = await db.collection("users").doc(userId).get();
         if(doc.exists) {
-            const p = doc.data().profile;
+            const p = doc.data().profile || {};
             return {
                 id: userId,
                 displayName: p.displayName || userId,
@@ -154,33 +123,21 @@ async function getOtherUserData(userId) {
             };
         }
     } catch(e) { console.log(e); }
-    
-    return {
-        id: userId,
-        displayName: userId,
-        avatar: `https://ui-avatars.com/api/?name=${userId}&background=333&color=fff`
-    };
+    return { id: userId, displayName: userId, avatar: `https://ui-avatars.com/api/?name=${userId}&background=333&color=fff` };
 }
 
-// Saving Data to Cloud
 async function saveData() {
     if(!currentUser) return;
     try {
-        // Update document
         await db.collection("users").doc(currentUser).update({
             roommates: data.roommates,
             expenses: data.expenses,
             profile: data.profile
         });
-        // UI updates automatically via onSnapshot listener
-    } catch (error) {
-        console.error("Error saving data: ", error);
-        alert("Sync Error! Check internet connection.");
-    }
+    } catch (error) { console.error("Error saving data: ", error); }
 }
 
-// --- UI & LOGIC ---
-
+// --- UI RENDER (FIXED) ---
 async function renderRoommates() {
     const list = document.getElementById('roommatesList');
     const select = document.getElementById('exPayer');
@@ -189,84 +146,27 @@ async function renderRoommates() {
     let listHTML = '';
     let selectHTML = '';
 
-    // Render list with placeholders first
     for (const userId of data.roommates) {
         let isMe = userId === currentUser;
-        
         listHTML += `<div class="chip verified" id="chip-${userId}">
-            <img src="https://ui-avatars.com/api/?name=${userId}&background=333&color=fff"> 
-            ${userId} ${isMe ? '(Me)' : ''}
+            <img src="https://ui-avatars.com/api/?name=${userId}&background=333&color=fff" id="img-chip-${userId}"> 
+            <span id="name-chip-${userId}">${userId}</span> ${isMe ? '(Me)' : ''}
             ${!isMe ? `<i class="fas fa-times" style="cursor:pointer; opacity:0.6; margin-left:5px;" onclick="removeRoommate('${userId}')"></i>` : ''}
         </div>`;
+        selectHTML += `<option value="${userId}" id="opt-${userId}">${userId}</option>`;
         
-        selectHTML += `<option value="${userId}">${userId}</option>`;
-        
-        // Fetch real details asynchronously
+        // Lazy Load real profile data
         getOtherUserData(userId).then(realUser => {
-            const el = document.getElementById(`chip-${userId}`);
-            if(el) {
-                el.querySelector('img').src = realUser.avatar;
-                // We perform a text replacement carefully or rebuild innerHTML if needed
-                // Simple replacement logic for prototype:
-                // Re-rendering inner HTML is safer for event listeners if we were careful, 
-                // but here updating img src and text node is sufficient.
-                // Note: This naive replace might fail if DOM changes fast, but works for basic app.
-            }
-            // Update option text
-            const opt = select.querySelector(`option[value="${userId}"]`);
-            if(opt) opt.innerText = realUser.displayName;
+            const nameEl = document.getElementById(`name-chip-${userId}`);
+            const imgEl = document.getElementById(`img-chip-${userId}`);
+            const optEl = document.getElementById(`opt-${userId}`);
+            if (nameEl) nameEl.innerText = realUser.displayName;
+            if (imgEl) imgEl.src = realUser.avatar;
+            if (optEl) optEl.innerText = realUser.displayName;
         });
     }
-
     list.innerHTML = listHTML;
     select.innerHTML = selectHTML;
-}
-
-async function addVerifiedRoommate() {
-    const inputID = document.getElementById('newRoommateID').value.trim();
-    if (!inputID) return;
-    if (inputID === currentUser) { alert("Already added!"); return; }
-
-    const btn = document.querySelector('button[onclick="addVerifiedRoommate()"]');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; // Loading state
-
-    try {
-        const doc = await db.collection("users").doc(inputID).get();
-        if (doc.exists) {
-            if (!data.roommates.includes(inputID)) {
-                data.roommates.push(inputID);
-                document.getElementById('newRoommateID').value = '';
-                saveData(); // Sync to cloud
-                alert(`Success! Added ${inputID}`);
-            } else { alert("User already added."); }
-        } else {
-            alert(`User ID '${inputID}' not found in database.`);
-        }
-    } catch (e) {
-        console.error(e);
-        alert("Network Error. Check console.");
-    }
-    btn.innerHTML = '<i class="fas fa-user-plus"></i>';
-}
-
-function removeRoommate(id) {
-    if(id === currentUser) { alert("Cannot remove self!"); return; }
-    if(confirm(`Remove ${id}?`)) { 
-        data.roommates = data.roommates.filter(r => r !== id); 
-        saveData(); 
-    }
-}
-
-// Expenses
-function addExpense() {
-    const amount = parseFloat(document.getElementById('exAmount').value);
-    const payer = document.getElementById('exPayer').value;
-    const desc = document.getElementById('exDesc').value;
-    if(amount && payer && desc) {
-        data.expenses.unshift({ id: Date.now(), amount, payerID: payer, desc, date: new Date().toLocaleDateString() });
-        saveData(); 
-        closeModal();
-    }
 }
 
 function renderExpenses() {
@@ -274,40 +174,80 @@ function renderExpenses() {
     if(data.expenses.length === 0) { list.innerHTML = '<div style="text-align:center; padding: 40px; opacity:0.5;">No transactions</div>'; return; }
     
     list.innerHTML = data.expenses.map(e => {
-        // Use placeholder initially
         return `<div class="expense-item">
             <div style="display:flex; align-items:center; gap: 15px;">
-                <div style="width:40px; height:40px; border-radius:12px; background:#333; display:flex; align-items:center; justify-content:center;">
-                    <i class="fas fa-receipt"></i>
+                <img src="https://ui-avatars.com/api/?name=${e.payerID}&background=333&color=fff" id="exp-img-${e.id}" style="width:40px; height:40px; border-radius:12px; object-fit:cover;">
+                <div>
+                    <div style="font-weight: 600;">${e.desc}</div>
+                    <small style="color: var(--text-muted);"><span id="exp-name-${e.id}">${e.payerID}</span> • ${e.date}</small>
                 </div>
-                <div><div style="font-weight: 600;">${e.desc}</div><small style="color: var(--text-muted);">${e.payerID} • ${e.date}</small></div>
             </div>
             <div style="text-align:right;"><div style="font-weight: 700; color: var(--text-main);">₹${e.amount}</div><i class="fas fa-trash" style="font-size: 0.8rem; color: var(--danger); cursor: pointer; opacity: 0.6;" onclick="deleteExpense(${e.id})"></i></div>
         </div>`;
     }).join('');
+
+    // Lazy load expense profiles
+    data.expenses.forEach(e => {
+        getOtherUserData(e.payerID).then(realUser => {
+            const imgEl = document.getElementById(`exp-img-${e.id}`);
+            const nameEl = document.getElementById(`exp-name-${e.id}`);
+            if(imgEl) imgEl.src = realUser.avatar;
+            if(nameEl) nameEl.innerText = realUser.displayName;
+        });
+    });
 }
 
-function deleteExpense(id) { 
-    data.expenses = data.expenses.filter(e => e.id !== id); 
-    saveData(); 
+// --- LOGIC ---
+async function addVerifiedRoommate() {
+    const inputID = document.getElementById('newRoommateID').value.trim();
+    if (!inputID) return;
+    if (inputID === currentUser) { alert("Already added!"); return; }
+
+    const btn = document.querySelector('button[onclick="addVerifiedRoommate()"]');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+        const doc = await db.collection("users").doc(inputID).get();
+        if (doc.exists) {
+            if (!data.roommates.includes(inputID)) {
+                data.roommates.push(inputID);
+                document.getElementById('newRoommateID').value = '';
+                saveData();
+                alert(`Success! Added ${inputID}`);
+            } else { alert("User already added."); }
+        } else { alert(`User ID '${inputID}' not found.`); }
+    } catch (e) { console.error(e); alert("Network Error"); }
+    btn.innerHTML = '<i class="fas fa-user-plus"></i>';
 }
 
-// --- Profile Updates ---
+function removeRoommate(id) {
+    if(id === currentUser) { alert("Cannot remove self!"); return; }
+    if(confirm(`Remove ${id}?`)) { data.roommates = data.roommates.filter(r => r !== id); saveData(); }
+}
+
+function addExpense() {
+    const amount = parseFloat(document.getElementById('exAmount').value);
+    const payer = document.getElementById('exPayer').value;
+    const desc = document.getElementById('exDesc').value;
+    if(amount && payer && desc) {
+        data.expenses.unshift({ id: Date.now(), amount, payerID: payer, desc, date: new Date().toLocaleDateString() });
+        saveData(); closeModal();
+    }
+}
+
+function deleteExpense(id) { data.expenses = data.expenses.filter(e => e.id !== id); saveData(); }
+
 function updateProfileUI() {
     const finalAvatar = data.profile.avatar || `https://ui-avatars.com/api/?name=${currentUser}&background=6366f1&color=fff`;
-    
     document.getElementById('header-avatar').style.display = 'block';
     document.getElementById('header-avatar').querySelector('img').src = finalAvatar;
     document.getElementById('display-username').innerText = data.profile.displayName;
-    
     document.getElementById('menu-user-avatar').src = finalAvatar;
     document.getElementById('menu-user-name').innerText = data.profile.displayName;
     document.getElementById('menu-user-id').innerText = '@' + currentUser;
-
     document.getElementById('profile-img-preview').src = finalAvatar;
     document.getElementById('profile-name-display').innerText = data.profile.displayName;
     document.getElementById('profile-id-display').innerText = '@' + currentUser;
-    
     document.getElementById('edit-display-name').value = data.profile.displayName;
     document.getElementById('edit-bio').value = data.profile.bio;
     document.getElementById('edit-username').value = currentUser;
@@ -317,26 +257,16 @@ async function saveProfileChanges() {
     const newName = document.getElementById('edit-display-name').value.trim();
     const newPass = document.getElementById('edit-password').value.trim();
     const imgSrc = document.getElementById('profile-img-preview').src;
-
     data.profile.displayName = newName || currentUser;
     data.profile.bio = document.getElementById('edit-bio').value.trim();
     if(!imgSrc.includes('ui-avatars.com')) data.profile.avatar = imgSrc;
-
     if(newPass) {
-        try {
-            await db.collection("users").doc(currentUser).update({ password: newPass });
-            alert("Profile and Password updated!");
-            document.getElementById('edit-password').value = '';
-        } catch(e) { console.error(e); alert("Error updating password"); }
-    } else {
-        alert("Profile updated!");
-    }
-    
-    saveData(); // Save profile data
-    switchView('expenses');
+        try { await db.collection("users").doc(currentUser).update({ password: newPass }); alert("Profile and Password updated!"); document.getElementById('edit-password').value = ''; } catch(e) { alert("Error updating password"); }
+    } else { alert("Profile updated!"); }
+    saveData(); switchView('expenses');
 }
 
-// --- Utils ---
+// --- UTILS ---
 function openProfile() { switchView('profile'); }
 function openPasswordChange() { openProfile(); setTimeout(() => { document.getElementById('security-section').scrollIntoView({ behavior: 'smooth' }); document.getElementById('edit-password').focus(); }, 300); }
 function handleImageUpload(input) { if (input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { if(e.total > 2000000) { alert("Image too large!"); return; } document.getElementById('profile-img-preview').src = e.target.result; }; reader.readAsDataURL(input.files[0]); } }
