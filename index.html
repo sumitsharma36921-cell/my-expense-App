@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Splitter - Ultra Premium</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="default">
+
+    <div class="aurora-bg"></div>
+
+    <nav class="sidebar">
+        <div class="logo">
+            <i class="fas fa-bolt" style="color: var(--primary)"></i> Split.Pro
+        </div>
+        <div style="flex-grow: 1;">
+            <div class="nav-item active" onclick="switchView('expenses')"><i class="fas fa-wallet"></i> Overview</div>
+            <div class="nav-item" onclick="switchView('summary')"><i class="fas fa-chart-pie"></i> Analytics</div>
+            <div class="nav-item" onclick="exportCSV()"><i class="fas fa-file-export"></i> Export Data</div>
+        </div>
+
+        <div class="theme-selector">
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">CUSTOMIZE THEME</p>
+            <div style="display: flex; gap: 10px;">
+                <div class="dot" style="background: #6366f1;" onclick="setTheme('default')" title="Midnight"></div>
+                <div class="dot" style="background: #00f2ff;" onclick="setTheme('neon-blue')" title="Cyberpunk"></div>
+                <div class="dot" style="background: #ff9a9e;" onclick="setTheme('sunset')" title="Sunset"></div>
+                <div class="dot" style="background: #00b09b;" onclick="setTheme('forest')" title="Forest"></div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+                <h2>Dashboard</h2>
+                <span class="header-sub">Welcome back, Sumit</span>
+            </div>
+            <div style="background: rgba(255,255,255,0.05); padding: 5px; border-radius: 12px; border: 1px solid var(--glass-border);">
+                <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.8rem;" onclick="clearAllData()">Reset App</button>
+            </div>
+        </div>
+
+        <div id="view-expenses" class="dashboard-grid" style="margin-top: 2rem;">
+            <div>
+                <div class="card">
+                    <h3 style="margin-bottom: 15px;">Roommates</h3>
+                    <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                        <input type="text" id="newRoommate" placeholder="Add name..." style="margin-bottom:0;">
+                        <button class="btn btn-primary" onclick="addRoommate()"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <div id="roommatesList" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
+                </div>
+
+                <div class="card" style="margin-top: 20px;">
+                    <h3 style="margin-bottom: 15px;">AI Actions</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <button class="btn btn-outline" onclick="triggerAI('minimize')"><i class="fas fa-magic"></i> Settle Up</button>
+                        <button class="btn btn-outline" onclick="triggerAI('suggest')"><i class="fas fa-lightbulb"></i> Insights</button>
+                    </div>
+                    <div id="aiCard" class="ai-card">
+                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; color: var(--accent);">
+                            <i class="fas fa-sparkles"></i> <strong>AI Analysis</strong>
+                        </div>
+                        <p id="aiText" style="font-size: 0.95rem; line-height: 1.6; color: rgba(255,255,255,0.9);"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                    <h3>Recent Transactions</h3>
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">Swipe to delete</span>
+                </div>
+                <div id="expenseList" style="max-height: 500px; overflow-y: auto; padding-right: 5px;">
+                    </div>
+            </div>
+        </div>
+
+        <div id="view-summary" class="dashboard-grid" style="margin-top: 2rem; display: none;">
+            <div class="card">
+                <h3>Spending Breakdown</h3>
+                <div style="height: 250px; display: flex; justify-content: center; margin-top: 20px;">
+                    <canvas id="doughnutChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Settlement Plan</h3>
+                <div id="settlementPlan" style="margin-top: 20px; color: var(--text-muted);">
+                    Run "Settle Up" AI action first.
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="fab" onclick="openModal()">+</div>
+
+    <div class="modal-overlay" id="expenseModal">
+        <div class="modal">
+            <h2 style="font-size: 1.8rem; margin-bottom: 2rem;">Add Expense</h2>
+            
+            <label style="color: var(--text-muted); font-size: 0.85rem; margin-left: 5px;">How much?</label>
+            <input type="number" id="exAmount" placeholder="₹ 0.00" style="font-size: 1.2rem; font-weight: bold;">
+            
+            <label style="color: var(--text-muted); font-size: 0.85rem; margin-left: 5px;">Who paid?</label>
+            <select id="exPayer"></select>
+            
+            <label style="color: var(--text-muted); font-size: 0.85rem; margin-left: 5px;">For what?</label>
+            <input type="text" id="exDesc" placeholder="e.g. Dinner, WiFi">
+            
+            <div style="display: flex; justify-content: flex-end; gap: 15px; margin-top: 20px;">
+                <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="addExpense()">Save Expense</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
