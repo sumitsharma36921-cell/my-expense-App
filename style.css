@@ -1,35 +1,22 @@
 :root {
     --font-main: 'Outfit', sans-serif;
-    
-    /* Modern Palette - Midnight Default */
     --bg-deep: #050505;
     --glass-bg: rgba(20, 20, 30, 0.4);
     --glass-border: rgba(255, 255, 255, 0.08);
     --glass-blur: 20px;
-    
-    --primary: #6366f1; /* Indigo */
-    --secondary: #a855f7; /* Purple */
-    --accent: #ec4899; /* Pink */
-    
+    --primary: #6366f1;
+    --secondary: #a855f7;
+    --accent: #ec4899;
     --text-main: #ffffff;
     --text-muted: #94a3b8;
-    
     --success: #10b981;
     --danger: #ef4444;
-    
     --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
-/* Themes */
-[data-theme="neon-blue"] {
-    --primary: #00f2ff; --secondary: #0078ff; --accent: #4c00ff;
-}
-[data-theme="sunset"] {
-    --primary: #ff9a9e; --secondary: #fecfef; --accent: #feada6;
-}
-[data-theme="forest"] {
-    --primary: #00b09b; --secondary: #96c93d; --accent: #43cea2;
-}
+[data-theme="neon-blue"] { --primary: #00f2ff; --secondary: #0078ff; --accent: #4c00ff; }
+[data-theme="sunset"] { --primary: #ff9a9e; --secondary: #fecfef; --accent: #feada6; }
+[data-theme="forest"] { --primary: #00b09b; --secondary: #96c93d; --accent: #43cea2; }
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-main); }
 
@@ -42,7 +29,6 @@ body {
     position: relative;
 }
 
-/* --- Animated Aurora Background --- */
 .aurora-bg {
     position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
     background: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.15), transparent 60%),
@@ -53,26 +39,16 @@ body {
 }
 @keyframes rotateBg { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* --- Glass Sidebar --- */
 .sidebar {
-    width: 260px;
-    margin: 20px;
-    margin-right: 0;
-    background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--glass-border);
-    border-radius: 24px;
-    padding: 2rem;
-    display: flex;
-    flex-direction: column;
-    box-shadow: var(--card-shadow);
-    z-index: 10;
+    width: 260px; margin: 20px; margin-right: 0;
+    background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border); border-radius: 24px; padding: 2rem;
+    display: flex; flex-direction: column; box-shadow: var(--card-shadow); z-index: 10;
 }
 
 .logo { 
     display: flex; align-items: center; gap: 12px; margin-bottom: 3rem; 
-    font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px;
+    font-size: 1.5rem; font-weight: 700;
     background: linear-gradient(to right, var(--primary), var(--secondary));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
@@ -85,59 +61,42 @@ body {
 .nav-item:hover { background: rgba(255,255,255,0.05); color: white; transform: translateX(5px); }
 .nav-item.active {
     background: linear-gradient(90deg, rgba(99,102,241,0.2), transparent);
-    border-left: 3px solid var(--primary);
-    color: var(--primary);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    border-left: 3px solid var(--primary); color: var(--primary);
 }
 
-/* --- Theme Dots --- */
 .theme-selector { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--glass-border); }
 .dot { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(255,255,255,0.1); transition: 0.3s; }
 .dot:hover { transform: scale(1.1); }
 
-/* --- Main Content --- */
 .main-content { flex: 1; padding: 20px 40px; overflow-y: auto; position: relative; z-index: 5; }
 
 h2 { font-size: 2.5rem; font-weight: 700; margin-bottom: 5px; letter-spacing: -1px; }
 .header-sub { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 2rem; display: block;}
 
 .card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--glass-border);
-    border-radius: 24px;
-    padding: 1.8rem;
-    box-shadow: var(--card-shadow);
-    transition: transform 0.3s, box-shadow 0.3s;
+    background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border); border-radius: 24px; padding: 1.8rem;
+    box-shadow: var(--card-shadow); transition: transform 0.3s;
 }
 .card:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.2); }
 
-/* --- Dashboard Grid --- */
 .dashboard-grid { display: grid; grid-template-columns: 1.2fr 1.8fr; gap: 25px; max-width: 1400px; margin: 0 auto; }
 
-/* --- Inputs & Buttons --- */
 input, select {
     width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
     color: white; padding: 14px; border-radius: 14px; outline: none; margin-bottom: 10px;
     font-size: 0.95rem; transition: 0.3s;
 }
-input:focus { border-color: var(--primary); background: rgba(0,0,0,0.4); box-shadow: 0 0 15px rgba(99,102,241,0.2); }
+input:focus { border-color: var(--primary); background: rgba(0,0,0,0.4); }
 
 .btn {
     padding: 12px 24px; border-radius: 14px; border: none; cursor: pointer; font-weight: 600;
-    transition: 0.3s; font-size: 0.9rem; letter-spacing: 0.5px;
+    transition: 0.3s; font-size: 0.9rem;
 }
-.btn-primary {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    color: white; box-shadow: 0 4px 15px rgba(99,102,241,0.4);
-}
-.btn-primary:hover { box-shadow: 0 6px 25px rgba(99,102,241,0.6); transform: translateY(-2px); }
-
+.btn-primary { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 25px rgba(99,102,241,0.6); }
 .btn-outline { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: white; }
-.btn-outline:hover { background: rgba(255,255,255,0.1); border-color: var(--text-muted); }
 
-/* --- Lists & Chips --- */
 .chip {
     background: rgba(255,255,255,0.08); padding: 8px 16px; border-radius: 30px;
     font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px;
@@ -147,31 +106,27 @@ input:focus { border-color: var(--primary); background: rgba(0,0,0,0.4); box-sha
 .expense-item {
     display: flex; justify-content: space-between; align-items: center;
     padding: 16px; margin-bottom: 10px; background: rgba(255,255,255,0.03);
-    border-radius: 18px; border: 1px solid transparent; transition: 0.2s;
+    border-radius: 18px; transition: 0.2s;
 }
-.expense-item:hover { background: rgba(255,255,255,0.08); border-color: var(--glass-border); transform: scale(1.01); }
+.expense-item:hover { background: rgba(255,255,255,0.08); transform: scale(1.01); }
 
-/* --- AI Card with 3D Float --- */
 .ai-card {
     background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.15));
-    border: 1px solid rgba(255,255,255,0.2);
-    padding: 20px; border-radius: 20px; margin-top: 20px; display: none;
-    animation: float 4s ease-in-out infinite;
+    border: 1px solid rgba(255,255,255,0.2); padding: 20px; border-radius: 20px; 
+    margin-top: 20px; display: none; animation: float 4s ease-in-out infinite;
 }
 .ai-card.show { display: block; }
 @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
 
-/* --- FAB --- */
 .fab {
     position: fixed; bottom: 40px; right: 40px; width: 65px; height: 65px;
     background: linear-gradient(135deg, var(--primary), var(--accent));
     border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    color: white; font-size: 28px; box-shadow: 0 10px 40px rgba(236, 72, 153, 0.5);
-    cursor: pointer; z-index: 100; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    color: white; font-size: 28px; cursor: pointer; z-index: 100; transition: 0.4s;
+    box-shadow: 0 10px 40px rgba(236, 72, 153, 0.5);
 }
 .fab:hover { transform: scale(1.1) rotate(90deg); }
 
-/* --- Modal --- */
 .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
@@ -186,7 +141,6 @@ input:focus { border-color: var(--primary); background: rgba(0,0,0,0.4); box-sha
 }
 .modal-overlay.active .modal { transform: translateY(0); }
 
-/* Mobile */
 @media (max-width: 768px) {
     body { flex-direction: column; overflow-y: auto; height: auto; }
     .sidebar { width: auto; margin: 10px; height: auto; padding: 1.5rem; }
