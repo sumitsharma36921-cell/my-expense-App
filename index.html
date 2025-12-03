@@ -7,10 +7,10 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-    
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <link rel="stylesheet" href="style.css">
 </head>
 <body data-theme="default">
@@ -22,8 +22,8 @@
             <i class="fas fa-bolt" style="color: var(--primary)"></i> Split.Pro
         </div>
         <div style="flex-grow: 1;">
-            <div class="nav-item active" onclick="switchView('expenses')"><i class="fas fa-wallet"></i> Overview</div>
-            <div class="nav-item" onclick="switchView('summary')"><i class="fas fa-chart-pie"></i> Analytics</div>
+            <div class="nav-item active" onclick="switchView('expenses', this)"><i class="fas fa-wallet"></i> Overview</div>
+            <div class="nav-item" onclick="switchView('summary', this)"><i class="fas fa-chart-pie"></i> Analytics</div>
             <div class="nav-item" onclick="exportCSV()"><i class="fas fa-file-export"></i> Export Data</div>
         </div>
 
@@ -42,7 +42,7 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-end;">
             <div>
                 <h2>Dashboard</h2>
-                <span class="header-sub">Welcome back, Sumit</span>
+                <span class="header-sub">Manage your shared expenses</span>
             </div>
             <div style="background: rgba(255,255,255,0.05); padding: 5px; border-radius: 12px; border: 1px solid var(--glass-border);">
                 <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.8rem;" onclick="clearAllData()">Reset App</button>
@@ -54,10 +54,13 @@
                 <div class="card">
                     <h3 style="margin-bottom: 15px;">Roommates</h3>
                     <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                        <input type="text" id="newRoommate" placeholder="Add name..." style="margin-bottom:0;">
+                        <input type="text" id="newRoommate" placeholder="Add name (e.g. Sumit)..." style="margin-bottom:0;">
                         <button class="btn btn-primary" onclick="addRoommate()"><i class="fas fa-plus"></i></button>
                     </div>
                     <div id="roommatesList" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
+                    <div id="emptyRoommateMsg" style="color: var(--text-muted); font-size: 0.85rem; display:none; margin-top:10px;">
+                        No roommates yet. Add someone above!
+                    </div>
                 </div>
 
                 <div class="card" style="margin-top: 20px;">
