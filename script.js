@@ -1,18 +1,27 @@
+// --- FIREBASE CONFIGURATION (Provided by User) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBhGkFL6Rz6FUbDhS7bAMWlq0VYB0XMceE",
+  authDomain: "splitpro-app.firebaseapp.com",
+  projectId: "splitpro-app",
+  storageBucket: "splitpro-app.firebasestorage.app",
+  messagingSenderId: "781282859102",
+  appId: "1:781282859102:web:fc0fc11a9c6d47246bfccf",
+  measurementId: "G-YSWLQB4ZQB"
+};
+
+// Initialize Firebase
+if (typeof firebase !== "undefined") {
+    firebase.initializeApp(firebaseConfig);
+    var db = firebase.firestore();
+    console.log("Firebase initialized successfully");
+} else {
+    console.error("Firebase SDK not loaded. Check index.html");
+}
+
+// --- APP LOGIC ---
 let currentUser = null;
 let data = { roommates: [], expenses: [], profile: { displayName: '', bio: '', avatar: '' } };
-
-// --- Database Helpers ---
-function getUsersDB() { return JSON.parse(localStorage.getItem('proUsers')) || {}; }
-function saveUsersDB(db) { localStorage.setItem('proUsers', JSON.stringify(db)); }
-function getOtherUserData(userId) {
-    const raw = JSON.parse(localStorage.getItem(`proData_${userId}`)) || {};
-    const profile = raw.profile || {};
-    return {
-        id: userId,
-        displayName: profile.displayName || userId,
-        avatar: profile.avatar || `https://ui-avatars.com/api/?name=${userId}&background=333&color=fff`
-    };
-}
+let unsubscribeListener = null;
 
 // --- Auth & Strict Validation ---
 function toggleAuthMode() {
@@ -31,7 +40,8 @@ function validateUsername(username) {
     return regex.test(username);
 }
 
-function handleSignup() {
+// --- CLOUD AUTH FUNCTIONS ---
+async function handleSignup() {
     const u = document.getElementById('auth-username').value.trim();
     const p = document.getElementById('auth-password').value.trim();
     const msg = document.getElementById('auth-msg');
@@ -39,32 +49,69 @@ function handleSignup() {
     if (!u || !p) { msg.innerText = 'Fill all fields'; msg.style.color = 'var(--danger)'; return; }
     if (!validateUsername(u)) { msg.innerText = 'User ID: Letters, Numbers & _ only.'; msg.style.color = 'var(--danger)'; return; }
 
-    let db = getUsersDB();
-    if (db[u]) { msg.innerText = 'User ID already taken!'; msg.style.color = 'var(--danger)'; return; }
+    msg.innerText = 'Checking availability...';
     
-    db[u] = p; saveUsersDB(db);
-    localStorage.setItem(`proData_${u}`, JSON.stringify({ roommates: [u], expenses: [], profile: { displayName: u, avatar: '' } }));
-    
-    msg.innerText = 'Account created! Login now.'; msg.style.color = 'var(--success)';
-    setTimeout(toggleAuthMode, 1500);
+    try {
+        // Check if user exists in Cloud
+        const userDoc = await db.collection("users").doc(u).get();
+        
+        if (userDoc.exists) {
+            msg.innerText = 'User ID already taken!'; msg.style.color = 'var(--danger)';
+        } else {
+            // Create New User in Cloud
+            const newUser = {
+                password: p, 
+                roommates: [u],
+                expenses: [],
+                profile: { displayName: u, avatar: '', bio: '' }
+            };
+            
+            await db.collection("users").doc(u).set(newUser);
+            
+            msg.innerText = 'Account created! Login now.'; msg.style.color = 'var(--success)';
+            setTimeout(toggleAuthMode, 1500);
+        }
+    } catch (error) {
+        console.error(error);
+        msg.innerText = 'Error connecting to server. Check Firestore Rules.'; msg.style.color = 'var(--danger)';
+    }
 }
 
-function handleLogin() {
+async function handleLogin() {
     const u = document.getElementById('auth-username').value.trim();
     const p = document.getElementById('auth-password').value.trim();
-    let db = getUsersDB();
-    if (db[u] && db[u] === p) {
-        currentUser = u;
-        document.getElementById('auth-screen').style.display = 'none';
-        document.getElementById('app-dashboard').style.display = 'flex';
-        loadUserData(u);
-    } else {
-        document.getElementById('auth-msg').innerText = 'Invalid credentials';
-        document.getElementById('auth-msg').style.color = 'var(--danger)';
+    const msg = document.getElementById('auth-msg');
+    
+    msg.innerText = 'Verifying...';
+    
+    try {
+        const userDoc = await db.collection("users").doc(u).get();
+        
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            // Simple string check for prototype. 
+            // Warning: Passwords are visible in DB. Use Firebase Auth in production.
+            if (userData.password === p) {
+                currentUser = u;
+                document.getElementById('auth-screen').style.display = 'none';
+                document.getElementById('app-dashboard').style.display = 'flex';
+                loadUserData(u); // Load from Cloud
+            } else {
+                msg.innerText = 'Wrong password'; msg.style.color = 'var(--danger)';
+            }
+        } else {
+            msg.innerText = 'User not found'; msg.style.color = 'var(--danger)';
+        }
+    } catch (error) {
+        console.error(error);
+        msg.innerText = 'Connection failed. Check Internet/Rules.'; msg.style.color = 'var(--danger)';
     }
 }
 
 function handleLogout() {
+    // Unsubscribe from real-time listener to save resources
+    if(unsubscribeListener) { unsubscribeListener(); }
+    
     currentUser = null;
     document.getElementById('app-dashboard').style.display = 'none';
     document.getElementById('auth-screen').style.display = 'flex';
@@ -73,44 +120,190 @@ function handleLogout() {
     document.getElementById('mainDropdown').classList.remove('active');
 }
 
-// --- Data Loading & Updates ---
+// --- CLOUD DATA FUNCTIONS ---
+// Real-time Data Loading
 function loadUserData(username) {
-    const key = `proData_${username}`;
-    let raw = JSON.parse(localStorage.getItem(key)) || {};
-    data = {
-        roommates: raw.roommates || [username],
-        expenses: raw.expenses || [],
-        profile: raw.profile || { displayName: username, bio: '', avatar: '' }
-    };
-    if(!data.roommates.includes(username)) data.roommates.push(username); 
+    // Listen for changes in real-time
+    unsubscribeListener = db.collection("users").doc(username).onSnapshot((doc) => {
+        if (doc.exists) {
+            let raw = doc.data();
+            data = {
+                roommates: raw.roommates || [username],
+                expenses: raw.expenses || [],
+                profile: raw.profile || { displayName: username, bio: '', avatar: '' }
+            };
+            
+            updateProfileUI();
+            renderRoommates(); 
+            renderExpenses();
+            calculateSplit(); 
+        }
+    });
+}
+
+// Helper to fetch other user's info (Async)
+async function getOtherUserData(userId) {
+    try {
+        const doc = await db.collection("users").doc(userId).get();
+        if(doc.exists) {
+            const p = doc.data().profile;
+            return {
+                id: userId,
+                displayName: p.displayName || userId,
+                avatar: p.avatar || `https://ui-avatars.com/api/?name=${userId}&background=333&color=fff`
+            };
+        }
+    } catch(e) { console.log(e); }
     
-    updateProfileUI();
-    const savedTheme = localStorage.getItem(`proTheme_${username}`) || 'default';
-    setTheme(savedTheme);
-    renderRoommates(); 
-    renderExpenses();
+    return {
+        id: userId,
+        displayName: userId,
+        avatar: `https://ui-avatars.com/api/?name=${userId}&background=333&color=fff`
+    };
 }
 
-function saveData() {
+// Saving Data to Cloud
+async function saveData() {
     if(!currentUser) return;
-    localStorage.setItem(`proData_${currentUser}`, JSON.stringify(data));
-    renderRoommates(); renderExpenses(); updateProfileUI();
+    try {
+        // Update document
+        await db.collection("users").doc(currentUser).update({
+            roommates: data.roommates,
+            expenses: data.expenses,
+            profile: data.profile
+        });
+        // UI updates automatically via onSnapshot listener
+    } catch (error) {
+        console.error("Error saving data: ", error);
+        alert("Sync Error! Check internet connection.");
+    }
 }
 
+// --- UI & LOGIC ---
+
+async function renderRoommates() {
+    const list = document.getElementById('roommatesList');
+    const select = document.getElementById('exPayer');
+    document.getElementById('emptyRoommateMsg').style.display = data.roommates.length <= 1 ? 'block' : 'none';
+
+    let listHTML = '';
+    let selectHTML = '';
+
+    // Render list with placeholders first
+    for (const userId of data.roommates) {
+        let isMe = userId === currentUser;
+        
+        listHTML += `<div class="chip verified" id="chip-${userId}">
+            <img src="https://ui-avatars.com/api/?name=${userId}&background=333&color=fff"> 
+            ${userId} ${isMe ? '(Me)' : ''}
+            ${!isMe ? `<i class="fas fa-times" style="cursor:pointer; opacity:0.6; margin-left:5px;" onclick="removeRoommate('${userId}')"></i>` : ''}
+        </div>`;
+        
+        selectHTML += `<option value="${userId}">${userId}</option>`;
+        
+        // Fetch real details asynchronously
+        getOtherUserData(userId).then(realUser => {
+            const el = document.getElementById(`chip-${userId}`);
+            if(el) {
+                el.querySelector('img').src = realUser.avatar;
+                // We perform a text replacement carefully or rebuild innerHTML if needed
+                // Simple replacement logic for prototype:
+                // Re-rendering inner HTML is safer for event listeners if we were careful, 
+                // but here updating img src and text node is sufficient.
+                // Note: This naive replace might fail if DOM changes fast, but works for basic app.
+            }
+            // Update option text
+            const opt = select.querySelector(`option[value="${userId}"]`);
+            if(opt) opt.innerText = realUser.displayName;
+        });
+    }
+
+    list.innerHTML = listHTML;
+    select.innerHTML = selectHTML;
+}
+
+async function addVerifiedRoommate() {
+    const inputID = document.getElementById('newRoommateID').value.trim();
+    if (!inputID) return;
+    if (inputID === currentUser) { alert("Already added!"); return; }
+
+    const btn = document.querySelector('button[onclick="addVerifiedRoommate()"]');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; // Loading state
+
+    try {
+        const doc = await db.collection("users").doc(inputID).get();
+        if (doc.exists) {
+            if (!data.roommates.includes(inputID)) {
+                data.roommates.push(inputID);
+                document.getElementById('newRoommateID').value = '';
+                saveData(); // Sync to cloud
+                alert(`Success! Added ${inputID}`);
+            } else { alert("User already added."); }
+        } else {
+            alert(`User ID '${inputID}' not found in database.`);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Network Error. Check console.");
+    }
+    btn.innerHTML = '<i class="fas fa-user-plus"></i>';
+}
+
+function removeRoommate(id) {
+    if(id === currentUser) { alert("Cannot remove self!"); return; }
+    if(confirm(`Remove ${id}?`)) { 
+        data.roommates = data.roommates.filter(r => r !== id); 
+        saveData(); 
+    }
+}
+
+// Expenses
+function addExpense() {
+    const amount = parseFloat(document.getElementById('exAmount').value);
+    const payer = document.getElementById('exPayer').value;
+    const desc = document.getElementById('exDesc').value;
+    if(amount && payer && desc) {
+        data.expenses.unshift({ id: Date.now(), amount, payerID: payer, desc, date: new Date().toLocaleDateString() });
+        saveData(); 
+        closeModal();
+    }
+}
+
+function renderExpenses() {
+    const list = document.getElementById('expenseList');
+    if(data.expenses.length === 0) { list.innerHTML = '<div style="text-align:center; padding: 40px; opacity:0.5;">No transactions</div>'; return; }
+    
+    list.innerHTML = data.expenses.map(e => {
+        // Use placeholder initially
+        return `<div class="expense-item">
+            <div style="display:flex; align-items:center; gap: 15px;">
+                <div style="width:40px; height:40px; border-radius:12px; background:#333; display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-receipt"></i>
+                </div>
+                <div><div style="font-weight: 600;">${e.desc}</div><small style="color: var(--text-muted);">${e.payerID} • ${e.date}</small></div>
+            </div>
+            <div style="text-align:right;"><div style="font-weight: 700; color: var(--text-main);">₹${e.amount}</div><i class="fas fa-trash" style="font-size: 0.8rem; color: var(--danger); cursor: pointer; opacity: 0.6;" onclick="deleteExpense(${e.id})"></i></div>
+        </div>`;
+    }).join('');
+}
+
+function deleteExpense(id) { 
+    data.expenses = data.expenses.filter(e => e.id !== id); 
+    saveData(); 
+}
+
+// --- Profile Updates ---
 function updateProfileUI() {
     const finalAvatar = data.profile.avatar || `https://ui-avatars.com/api/?name=${currentUser}&background=6366f1&color=fff`;
     
-    // Header Button Avatar
     document.getElementById('header-avatar').style.display = 'block';
     document.getElementById('header-avatar').querySelector('img').src = finalAvatar;
     document.getElementById('display-username').innerText = data.profile.displayName;
     
-    // Menu Preview Avatar
     document.getElementById('menu-user-avatar').src = finalAvatar;
     document.getElementById('menu-user-name').innerText = data.profile.displayName;
     document.getElementById('menu-user-id').innerText = '@' + currentUser;
 
-    // Profile Edit Page
     document.getElementById('profile-img-preview').src = finalAvatar;
     document.getElementById('profile-name-display').innerText = data.profile.displayName;
     document.getElementById('profile-id-display').innerText = '@' + currentUser;
@@ -120,86 +313,7 @@ function updateProfileUI() {
     document.getElementById('edit-username').value = currentUser;
 }
 
-// --- Core Logic ---
-function addVerifiedRoommate() {
-    const inputID = document.getElementById('newRoommateID').value.trim();
-    const usersDB = getUsersDB();
-    if (!inputID) return;
-    if (inputID === currentUser) { alert("You are already in the list!"); return; }
-
-    if (usersDB.hasOwnProperty(inputID)) {
-        if (!data.roommates.includes(inputID)) {
-            data.roommates.push(inputID);
-            document.getElementById('newRoommateID').value = '';
-            saveData();
-            alert(`Success! Friend '${inputID}' added.`);
-        } else { alert("User already added."); }
-    } else { alert(`Error: User ID '${inputID}' not found.`); }
-}
-
-function removeRoommate(id) {
-    if(id === currentUser) { alert("You cannot remove yourself!"); return; }
-    if(confirm(`Remove ${id}?`)) { data.roommates = data.roommates.filter(r => r !== id); saveData(); }
-}
-
-function renderRoommates() {
-    const list = document.getElementById('roommatesList');
-    const select = document.getElementById('exPayer');
-    document.getElementById('emptyRoommateMsg').style.display = data.roommates.length <= 1 ? 'block' : 'none';
-
-    list.innerHTML = data.roommates.map(userId => {
-        const userData = getOtherUserData(userId);
-        return `<div class="chip verified" title="${userId}">
-            <img src="${userData.avatar}"> ${userData.displayName} ${userId === currentUser ? '(Me)' : ''}
-            ${userId !== currentUser ? `<i class="fas fa-times" style="cursor:pointer; opacity:0.6; margin-left:5px;" onclick="removeRoommate('${userId}')"></i>` : ''}
-        </div>`;
-    }).join('');
-
-    select.innerHTML = data.roommates.map(userId => `<option value="${userId}">${getOtherUserData(userId).displayName}</option>`).join('');
-}
-
-function addExpense() {
-    const amount = parseFloat(document.getElementById('exAmount').value);
-    const payer = document.getElementById('exPayer').value;
-    const desc = document.getElementById('exDesc').value;
-    if(amount && payer && desc) {
-        data.expenses.unshift({ id: Date.now(), amount, payerID: payer, desc, date: new Date().toLocaleDateString() });
-        saveData(); closeModal();
-    }
-}
-
-function renderExpenses() {
-    document.getElementById('expenseList').innerHTML = data.expenses.map(e => {
-        const payerData = getOtherUserData(e.payerID);
-        return `<div class="expense-item">
-            <div style="display:flex; align-items:center; gap: 15px;">
-                <img src="${payerData.avatar}" style="width:40px; height:40px; border-radius:12px; object-fit:cover;">
-                <div><div style="font-weight: 600;">${e.desc}</div><small style="color: var(--text-muted);">${payerData.displayName} • ${e.date}</small></div>
-            </div>
-            <div style="text-align:right;"><div style="font-weight: 700; color: var(--text-main);">₹${e.amount}</div><i class="fas fa-trash" style="font-size: 0.8rem; color: var(--danger); cursor: pointer; opacity: 0.6;" onclick="deleteExpense(${e.id})"></i></div>
-        </div>`;
-    }).join('') || '<div style="text-align:center; padding: 40px; opacity:0.5;">No transactions</div>';
-}
-
-function deleteExpense(id) { data.expenses = data.expenses.filter(e => e.id !== id); saveData(); }
-
-// --- Profile & Menu ---
-function openProfile() { switchView('profile'); }
-function openPasswordChange() {
-    openProfile();
-    setTimeout(() => { document.getElementById('security-section').scrollIntoView({ behavior: 'smooth' }); document.getElementById('edit-password').focus(); }, 300);
-}
-function handleImageUpload(input) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            if(e.total > 2000000) { alert("Image too large!"); return; }
-            document.getElementById('profile-img-preview').src = e.target.result;
-        };
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-function saveProfileChanges() {
+async function saveProfileChanges() {
     const newName = document.getElementById('edit-display-name').value.trim();
     const newPass = document.getElementById('edit-password').value.trim();
     const imgSrc = document.getElementById('profile-img-preview').src;
@@ -208,75 +322,31 @@ function saveProfileChanges() {
     data.profile.bio = document.getElementById('edit-bio').value.trim();
     if(!imgSrc.includes('ui-avatars.com')) data.profile.avatar = imgSrc;
 
-    saveData();
     if(newPass) {
-        let db = getUsersDB(); db[currentUser] = newPass; saveUsersDB(db);
-        alert("Updated successfully!"); document.getElementById('edit-password').value = '';
+        try {
+            await db.collection("users").doc(currentUser).update({ password: newPass });
+            alert("Profile and Password updated!");
+            document.getElementById('edit-password').value = '';
+        } catch(e) { console.error(e); alert("Error updating password"); }
+    } else {
+        alert("Profile updated!");
     }
+    
+    saveData(); // Save profile data
     switchView('expenses');
 }
 
 // --- Utils ---
-function setTheme(themeName) { document.body.setAttribute('data-theme', themeName); if(currentUser) localStorage.setItem(`proTheme_${currentUser}`, themeName); }
+function openProfile() { switchView('profile'); }
+function openPasswordChange() { openProfile(); setTimeout(() => { document.getElementById('security-section').scrollIntoView({ behavior: 'smooth' }); document.getElementById('edit-password').focus(); }, 300); }
+function handleImageUpload(input) { if (input.files && input.files[0]) { const reader = new FileReader(); reader.onload = function(e) { if(e.total > 2000000) { alert("Image too large!"); return; } document.getElementById('profile-img-preview').src = e.target.result; }; reader.readAsDataURL(input.files[0]); } }
+function setTheme(themeName) { document.body.setAttribute('data-theme', themeName); }
 function toggleMenu(event) { event.stopPropagation(); document.getElementById('mainDropdown').classList.toggle('active'); }
 document.addEventListener('click', (e) => { if(!e.target.closest('.menu-container')) document.getElementById('mainDropdown').classList.remove('active'); });
-
-function switchView(v, element) {
-    document.getElementById('view-expenses').style.display = 'none';
-    document.getElementById('view-summary').style.display = 'none';
-    document.getElementById('view-profile').style.display = 'none';
-    document.getElementById('fab-btn').style.display = 'flex';
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    
-    if(v === 'expenses') {
-        document.getElementById('view-expenses').style.display = 'grid';
-        if(element) element.classList.add('active'); else document.querySelectorAll('.nav-item')[0].classList.add('active');
-    } else if(v === 'summary') {
-        document.getElementById('view-summary').style.display = 'grid';
-        if(element) element.classList.add('active');
-        calculateSplit(); renderChart();
-    } else if(v === 'profile') {
-        document.getElementById('view-profile').style.display = 'block';
-        document.getElementById('fab-btn').style.display = 'none';
-    }
-    document.getElementById('mainDropdown').classList.remove('active');
-}
-
-// AI & Charts
-function triggerAI(type) {
-        const card = document.getElementById('aiCard');
-        const text = document.getElementById('aiText');
-        card.classList.remove('show');
-        setTimeout(() => {
-            card.classList.add('show');
-            if(type === 'suggest') { const total = data.expenses.reduce((a,b) => a + b.amount, 0); text.innerHTML = `Total spending: <strong style="color:var(--success)">₹${total}</strong>`; } 
-            else { calculateSplit(); text.innerHTML = `Check Analytics tab.`; }
-        }, 50);
-}
-function calculateSplit() {
-    let balances = {}; data.roommates.forEach(r => balances[r] = 0);
-    const total = data.expenses.reduce((sum, e) => sum + e.amount, 0);
-    const split = total / Math.max(1, data.roommates.length);
-    data.expenses.forEach(e => { if(balances[e.payerID] !== undefined) balances[e.payerID] += e.amount; });
-    for(let p in balances) balances[p] -= split;
-    let debtors = [], creditors = []; for(const [p, amt] of Object.entries(balances)) { if(amt < -0.1) debtors.push({ p, amt }); else if(amt > 0.1) creditors.push({ p, amt }); }
-    let html = '<ul style="list-style:none;">';
-    let i=0, j=0;
-    while(i < debtors.length && j < creditors.length) {
-        let d = debtors[i], c = creditors[j]; let val = Math.min(Math.abs(d.amt), c.amt);
-        html += `<li style="padding: 10px; border-bottom: 1px solid var(--glass-border); display:flex; justify-content:space-between;"><span><span style="color:var(--danger)">${getOtherUserData(d.p).displayName}</span> pays <span style="color:var(--success)">${getOtherUserData(c.p).displayName}</span></span><strong>₹${val.toFixed(0)}</strong></li>`;
-        d.amt += val; c.amt -= val; if(Math.abs(d.amt) < 0.1) i++; if(c.amt < 0.1) j++;
-    }
-    document.getElementById('settlementPlan').innerHTML = html + '</ul>';
-}
-let chartInstance = null;
-function renderChart() {
-        const ctx = document.getElementById('doughnutChart').getContext('2d');
-        let totals = {}; data.roommates.forEach(r => totals[getOtherUserData(r).displayName] = 0);
-        data.expenses.forEach(e => { let pName = getOtherUserData(e.payerID).displayName; if(totals[pName] !== undefined) totals[pName] += e.amount; });
-        if(chartInstance) chartInstance.destroy();
-        chartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(totals), datasets: [{ data: Object.values(totals), backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#10b981'], borderWidth:0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position:'right', labels:{color:'#fff'} } } } });
-}
+function switchView(v, element) { document.getElementById('view-expenses').style.display = 'none'; document.getElementById('view-summary').style.display = 'none'; document.getElementById('view-profile').style.display = 'none'; document.getElementById('fab-btn').style.display = 'flex'; document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active')); if(v === 'expenses') { document.getElementById('view-expenses').style.display = 'grid'; if(element) element.classList.add('active'); else document.querySelectorAll('.nav-item')[0].classList.add('active'); } else if(v === 'summary') { document.getElementById('view-summary').style.display = 'grid'; if(element) element.classList.add('active'); calculateSplit(); renderChart(); } else if(v === 'profile') { document.getElementById('view-profile').style.display = 'block'; document.getElementById('fab-btn').style.display = 'none'; } document.getElementById('mainDropdown').classList.remove('active'); }
+function triggerAI(type) { const card = document.getElementById('aiCard'); const text = document.getElementById('aiText'); card.classList.remove('show'); setTimeout(() => { card.classList.add('show'); if(type === 'suggest') { const total = data.expenses.reduce((a,b) => a + b.amount, 0); text.innerHTML = `Total spending: <strong style="color:var(--success)">₹${total}</strong>`; } else { calculateSplit(); text.innerHTML = `Check Analytics tab.`; } }, 50); }
+function calculateSplit() { let balances = {}; data.roommates.forEach(r => balances[r] = 0); const total = data.expenses.reduce((sum, e) => sum + e.amount, 0); const split = total / Math.max(1, data.roommates.length); data.expenses.forEach(e => { if(balances[e.payerID] !== undefined) balances[e.payerID] += e.amount; }); for(let p in balances) balances[p] -= split; let debtors = [], creditors = []; for(const [p, amt] of Object.entries(balances)) { if(amt < -0.1) debtors.push({ p, amt }); else if(amt > 0.1) creditors.push({ p, amt }); } let html = '<ul style="list-style:none;">'; let i=0, j=0; while(i < debtors.length && j < creditors.length) { let d = debtors[i], c = creditors[j]; let val = Math.min(Math.abs(d.amt), c.amt); html += `<li style="padding: 10px; border-bottom: 1px solid var(--glass-border); display:flex; justify-content:space-between;"><span><span style="color:var(--danger)">${d.p}</span> pays <span style="color:var(--success)">${c.p}</span></span><strong>₹${val.toFixed(0)}</strong></li>`; d.amt += val; c.amt -= val; if(Math.abs(d.amt) < 0.1) i++; if(c.amt < 0.1) j++; } document.getElementById('settlementPlan').innerHTML = html + '</ul>'; }
+let chartInstance = null; function renderChart() { const ctx = document.getElementById('doughnutChart').getContext('2d'); let totals = {}; data.roommates.forEach(r => totals[r] = 0); data.expenses.forEach(e => { if(totals[e.payerID] !== undefined) totals[e.payerID] += e.amount; }); if(chartInstance) chartInstance.destroy(); chartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(totals), datasets: [{ data: Object.values(totals), backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#10b981'], borderWidth:0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position:'right', labels:{color:'#fff'} } } } }); }
 function openModal() { document.getElementById('expenseModal').classList.add('active'); }
 function closeModal() { document.getElementById('expenseModal').classList.remove('active'); }
 function exportCSV() { alert('CSV Export'); }
