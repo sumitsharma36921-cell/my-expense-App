@@ -128,7 +128,7 @@ input:focus, textarea:focus { border-color: var(--primary); background: rgba(0,0
 .avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary); }
 .avatar-upload-btn { position: absolute; bottom: 0; right: 0; background: var(--secondary); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
-/* UPDATED MENU STYLES */
+/* MENU */
 .menu-container { position: relative; }
 .menu-btn {
     background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: white;
