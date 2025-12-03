@@ -45,7 +45,7 @@
                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 10px; padding-left: 10px; letter-spacing: 1px;">MY GROUPS</p>
                 <div id="groups-nav-list">
                     </div>
-                <button class="btn btn-outline" onclick="openGroupModal()" style="margin-top: 15px; border-style: dashed;">
+                <button class="btn btn-outline" onclick="openModal('groupModal')" style="margin-top: 15px; border-style: dashed;">
                     <i class="fas fa-plus"></i> Create New Group
                 </button>
             </div>
@@ -163,7 +163,8 @@
                 </div>
             </div>
         </main>
-        <div class="fab" id="fab-btn" onclick="openModal()">+</div>
+        
+        <div class="fab" id="fab-btn" onclick="openModal('expenseModal')">+</div>
     </div>
 
     <div class="modal-overlay" id="expenseModal">
