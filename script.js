@@ -130,15 +130,102 @@ async function saveData() {
     if(!currentUser) return;
     try {
         await db.collection("users").doc(currentUser).update({
-            roommates: data.roommates,
-            expenses: data.expenses,
+            // We only save roommates locally if changed, but addVerifiedRoommate handles sync
+            roommates: data.roommates, 
+            // expenses are updated via sync logic mostly
             profile: data.profile
         });
     } catch (error) { console.error("Error saving data: ", error); }
 }
 
-// --- UI RENDER (FIXED) ---
-async function renderRoommates() {
+// --- LOGIC (SYNC FIXES HERE) ---
+
+async function addVerifiedRoommate() {
+    const inputID = document.getElementById('newRoommateID').value.trim();
+    if (!inputID) return;
+    if (inputID === currentUser) { alert("Already added!"); return; }
+
+    const btn = document.querySelector('button[onclick="addVerifiedRoommate()"]');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+        const doc = await db.collection("users").doc(inputID).get();
+        if (doc.exists) {
+            if (!data.roommates.includes(inputID)) {
+                // 1. Add to MY list
+                await db.collection("users").doc(currentUser).update({
+                    roommates: firebase.firestore.FieldValue.arrayUnion(inputID)
+                });
+
+                // 2. Add ME to THEIR list (SYNC FIX)
+                await db.collection("users").doc(inputID).update({
+                    roommates: firebase.firestore.FieldValue.arrayUnion(currentUser)
+                });
+
+                alert(`Success! You and '${inputID}' are connected.`);
+                document.getElementById('newRoommateID').value = '';
+            } else { alert("User already added."); }
+        } else { alert(`User ID '${inputID}' not found.`); }
+    } catch (e) { console.error(e); alert("Network Error"); }
+    btn.innerHTML = '<i class="fas fa-user-plus"></i>';
+}
+
+function removeRoommate(id) {
+    if(id === currentUser) { alert("Cannot remove self!"); return; }
+    if(confirm(`Remove ${id}?`)) { 
+        // Only removing locally for now to avoid accidental deletions for friend
+        db.collection("users").doc(currentUser).update({
+             roommates: firebase.firestore.FieldValue.arrayRemove(id)
+        });
+    }
+}
+
+async function addExpense() {
+    const amount = parseFloat(document.getElementById('exAmount').value);
+    const payer = document.getElementById('exPayer').value;
+    const desc = document.getElementById('exDesc').value;
+    
+    if(amount && payer && desc) {
+        const newExpense = { 
+            id: Date.now(), 
+            amount, 
+            payerID: payer, 
+            desc, 
+            date: new Date().toLocaleDateString() 
+        };
+        closeModal();
+
+        // SYNC FIX: Add to EVERYONE's list
+        const updates = data.roommates.map(userId => {
+            return db.collection("users").doc(userId).update({
+                expenses: firebase.firestore.FieldValue.arrayUnion(newExpense)
+            }).catch(err => console.log(`Error updating ${userId}:`, err));
+        });
+
+        try { await Promise.all(updates); } 
+        catch (error) { alert("Error syncing expense."); }
+    }
+}
+
+async function deleteExpense(expenseId) {
+    if(!confirm("Delete for everyone?")) return;
+    const expenseToDelete = data.expenses.find(e => e.id === expenseId);
+    if (!expenseToDelete) return;
+
+    // SYNC FIX: Remove from EVERYONE's list
+    const updates = data.roommates.map(userId => {
+        return db.collection("users").doc(userId).update({
+            expenses: firebase.firestore.FieldValue.arrayRemove(expenseToDelete)
+        }).catch(err => console.log(`Error deleting for ${userId}:`, err));
+    });
+
+    try { await Promise.all(updates); } 
+    catch (error) { alert("Error deleting expense."); }
+}
+
+// --- UI RENDER (LAZY LOAD FIXES) ---
+
+function renderRoommates() {
     const list = document.getElementById('roommatesList');
     const select = document.getElementById('exPayer');
     document.getElementById('emptyRoommateMsg').style.display = data.roommates.length <= 1 ? 'block' : 'none';
@@ -155,7 +242,6 @@ async function renderRoommates() {
         </div>`;
         selectHTML += `<option value="${userId}" id="opt-${userId}">${userId}</option>`;
         
-        // Lazy Load real profile data
         getOtherUserData(userId).then(realUser => {
             const nameEl = document.getElementById(`name-chip-${userId}`);
             const imgEl = document.getElementById(`img-chip-${userId}`);
@@ -186,7 +272,6 @@ function renderExpenses() {
         </div>`;
     }).join('');
 
-    // Lazy load expense profiles
     data.expenses.forEach(e => {
         getOtherUserData(e.payerID).then(realUser => {
             const imgEl = document.getElementById(`exp-img-${e.id}`);
@@ -196,46 +281,6 @@ function renderExpenses() {
         });
     });
 }
-
-// --- LOGIC ---
-async function addVerifiedRoommate() {
-    const inputID = document.getElementById('newRoommateID').value.trim();
-    if (!inputID) return;
-    if (inputID === currentUser) { alert("Already added!"); return; }
-
-    const btn = document.querySelector('button[onclick="addVerifiedRoommate()"]');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-    try {
-        const doc = await db.collection("users").doc(inputID).get();
-        if (doc.exists) {
-            if (!data.roommates.includes(inputID)) {
-                data.roommates.push(inputID);
-                document.getElementById('newRoommateID').value = '';
-                saveData();
-                alert(`Success! Added ${inputID}`);
-            } else { alert("User already added."); }
-        } else { alert(`User ID '${inputID}' not found.`); }
-    } catch (e) { console.error(e); alert("Network Error"); }
-    btn.innerHTML = '<i class="fas fa-user-plus"></i>';
-}
-
-function removeRoommate(id) {
-    if(id === currentUser) { alert("Cannot remove self!"); return; }
-    if(confirm(`Remove ${id}?`)) { data.roommates = data.roommates.filter(r => r !== id); saveData(); }
-}
-
-function addExpense() {
-    const amount = parseFloat(document.getElementById('exAmount').value);
-    const payer = document.getElementById('exPayer').value;
-    const desc = document.getElementById('exDesc').value;
-    if(amount && payer && desc) {
-        data.expenses.unshift({ id: Date.now(), amount, payerID: payer, desc, date: new Date().toLocaleDateString() });
-        saveData(); closeModal();
-    }
-}
-
-function deleteExpense(id) { data.expenses = data.expenses.filter(e => e.id !== id); saveData(); }
 
 function updateProfileUI() {
     const finalAvatar = data.profile.avatar || `https://ui-avatars.com/api/?name=${currentUser}&background=6366f1&color=fff`;
@@ -251,19 +296,6 @@ function updateProfileUI() {
     document.getElementById('edit-display-name').value = data.profile.displayName;
     document.getElementById('edit-bio').value = data.profile.bio;
     document.getElementById('edit-username').value = currentUser;
-}
-
-async function saveProfileChanges() {
-    const newName = document.getElementById('edit-display-name').value.trim();
-    const newPass = document.getElementById('edit-password').value.trim();
-    const imgSrc = document.getElementById('profile-img-preview').src;
-    data.profile.displayName = newName || currentUser;
-    data.profile.bio = document.getElementById('edit-bio').value.trim();
-    if(!imgSrc.includes('ui-avatars.com')) data.profile.avatar = imgSrc;
-    if(newPass) {
-        try { await db.collection("users").doc(currentUser).update({ password: newPass }); alert("Profile and Password updated!"); document.getElementById('edit-password').value = ''; } catch(e) { alert("Error updating password"); }
-    } else { alert("Profile updated!"); }
-    saveData(); switchView('expenses');
 }
 
 // --- UTILS ---
